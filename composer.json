@@ -1,0 +1,27 @@
+{
+    "name": "innoweb/silverstripe-image-placeholders",
+    "type": "silverstripe-vendormodule",
+    "description": "Provides low quality, greyscale and data64 conversions for Image placeholders",
+    "license": "proprietary",
+    "keywords": ["silverstripe", "images", "optimisation", "performance", "placholder", "assets"],
+    "homepage": "https://github.com/innowebau/silverstripe-image-placeholders",
+    "support": {
+        "issues": "https://github.com/innowebau/silverstripe-image-placeholders/issues"
+    },
+    "authors": [{
+        "name": "Florian Thoma",
+        "homepage": "https://www.innoweb.com.au"
+    }],
+    "require": {
+        "ext-gd": "*",
+        "silverstripe/vendor-plugin": "^1.0",
+        "silverstripe/assets": "^1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Innoweb\\ImagePlaceholders\\": "src/"
+        }
+    },
+    "prefer-stable": true,
+    "minimum-stability": "dev"
+}
