@@ -4,8 +4,8 @@ Name: image-placeholders
 
 SilverStripe\Assets\File:
   extensions:
-    Innoweb\ImagePlaceholders\ImageExtension
+    - Innoweb\ImagePlaceholders\ImageExtension
 
 SilverStripe\Assets\Storage\DBFile:
   extensions:
-    Innoweb\ImagePlaceholders\ImageExtension
+    - Innoweb\ImagePlaceholders\ImageExtension
