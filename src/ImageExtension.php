@@ -42,7 +42,7 @@ class ImageExtension extends Extension
      */
     public function GIP($red = 230, $green = 230, $blue = 230)
     {
-        $variant = $this->getOwner()->variantName(__FUNCTION__);
+		$variant = $this->getOwner()->variantName(__FUNCTION__);
         return $this->getOwner()->manipulateImage($variant, function (Image_Backend $backend) use ($red, $green, $blue) {
             $backendClone = clone $backend;
             $backendClone->setQuality(1);
@@ -61,25 +61,29 @@ class ImageExtension extends Extension
 
             // generate uniform image stream
             $image = imagecreate($width, $height);
-            if (is_resource($image)) {
-                // allocate colour
-                imagecolorallocate($image, $red, $green, $blue);
-                // use memory stream to get the output
-                $stream = fopen('php://temp', 'r+');
-                imagepng($image, $stream);
-                rewind($stream);
-                $imageData = stream_get_contents($stream);
-                // release memory
-                imagedestroy($image);
+            // allocate colour
+            imagecolorallocate($image, $red, $green, $blue);
+            // use memory stream to get the output
+            $stream = fopen('php://temp', 'r+');
+            imagepng($image, $stream);
+            rewind($stream);
+            $imageData = stream_get_contents($stream);
+            // fill image with newly generated image data
+            $resource = $resource->fill($imageData);
+            // set resource
+            $backendClone->setImageResource($resource);
 
-                // fill image with newly generated image data
-                $resource = $resource->fill($imageData);
+            // release memory
+            imagedestroy($image); // noop since PHP 8
+            unset($width);
+            unset($height);
+            unset($divisor);
+            unset($image);
+            unset($resource);
+            unset($stream);
+            unset($imageData);
 
-                $backendClone->setImageResource($resource);
-                return $backendClone;
-            }
-
-            return $this->getOwner();
+            return $backendClone;
         });
     }
 
