@@ -4,6 +4,7 @@ namespace Innoweb\ImagePlaceholders;
 use BadMethodCallException;
 use SilverStripe\Assets\Image_Backend;
 use SilverStripe\Assets\InterventionBackend;
+use SilverStripe\Core\Environment;
 use SilverStripe\Core\Extension;
 
 class ImageExtension extends Extension
@@ -109,6 +110,9 @@ class ImageExtension extends Extension
      */
     public function DataURL()
     {
+		Environment::setMemoryLimitMax('512M');
+		Environment::increaseMemoryLimitTo('512M');
+
         if (!$this->getOwner()->getIsImage()) {
             throw new BadMethodCallException("Format can only be called on images");
         }
