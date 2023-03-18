@@ -14,14 +14,11 @@
     }],
     "require": {
         "ext-gd": "*",
-        "silverstripe/vendor-plugin": "^1.0",
-        "silverstripe/assets": "^1"
+        "silverstripe/assets": "^2"
     },
     "autoload": {
         "psr-4": {
             "Innoweb\\ImagePlaceholders\\": "src/"
         }
-    },
-    "prefer-stable": true,
-    "minimum-stability": "dev"
+    }
 }
