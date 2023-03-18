@@ -6,7 +6,7 @@ Provides low quality and greyscale image placeholders including base64 encoded U
 
 ## Requirements
 
-* Silverstripe Assets 1.x
+* Silverstripe Assets 2.x
 
 ## Installation
 
