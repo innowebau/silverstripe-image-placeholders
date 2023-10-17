@@ -2,13 +2,22 @@
 namespace Innoweb\ImagePlaceholders;
 
 use BadMethodCallException;
+use Intervention\Image\Image;
 use SilverStripe\Assets\Image_Backend;
 use SilverStripe\Assets\InterventionBackend;
+use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Environment;
 use SilverStripe\Core\Extension;
 
 class ImageExtension extends Extension
 {
+	/**
+	 * @var float minimum bits per pixel (BPP) threshold required for LCP LQIP image.
+	 * https://chromium.googlesource.com/chromium/src/+/refs/heads/main/docs/speed/metrics_changelog/2023_04_lcp.md
+	 * defines this as 0.05, so we give it another 10% to be on the safe side.
+	 */
+	private static $min_bits_per_pixel = 0.055;
+
     /**
      * Low Quality Image Placeholder
      *
@@ -88,7 +97,74 @@ class ImageExtension extends Extension
         });
     }
 
-    /**
+	/**
+	 * LCP LQIP based on https://csswizardry.com/2023/09/the-ultimate-lqip-lcp-technique/
+	 *
+	 * @return InterventionBackend intervention image backend
+	 */
+	public function LCPLQIP()
+	{
+		Environment::setMemoryLimitMax('512M');
+		Environment::increaseMemoryLimitTo('512M');
+
+		$variant = $this->getOwner()->variantName(__FUNCTION__);
+		return $this->getOwner()->manipulateImage($variant, function (Image_Backend $backend) use ($red, $green, $blue) {
+			$backendClone = clone $backend;
+
+			/**
+			 * @var $resource Image intervention image
+			 */
+			$resource = clone $backend->getImageResource();
+
+			// get size
+			$width = $resource->getWidth();
+			$height = $resource->getHeight();
+
+			// pixellate and blur
+			$resource = $resource->pixelate(8);
+			$resource = $resource->blur(100);
+			$resource = $resource->limitColors(255);
+			$resource = $resource->interlace();
+
+			// encode result
+			$quality = 0;
+			$result = $resource->encode($resource->extension, $quality);
+
+			// intervention image can be casted to string to access data
+			$size = strlen((string) $result);
+
+			// re-calculate result with increased quality if the image is too small
+			while ($size < self::min_size($width, $height) && $quality < 90) {
+				$quality += 1;
+				$result = $resource->encode($resource->extension, $quality);
+				$size = strlen((string) $result);
+			}
+
+			// update backend with result
+			$backendClone->setQuality($quality);
+			$backendClone->setImageResource($result);
+
+			// release memory
+			unset($resource);
+			unset($result);
+
+			return $backendClone;
+		});
+	}
+
+	/**
+	 * Calculate minimum size based on bits per pixel (BPP) threshold
+	 * @param int $width
+	 * @param int $height
+	 * @return int bytes
+	 */
+	private static function min_size($width, $height)
+	{
+		// divide by 8 to get bytes
+		return $width * $height * Config::inst()->get(__CLASS__, 'min_bits_per_pixel') / 8;
+	}
+
+	/**
      * Calculate Greatest Common Divisor for two integers
      * @param int $x
      * @param int $y
