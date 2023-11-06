@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](http://semver.org/).
 
+## [2.1.2]
+
+* add missing dependency
+
 ## [2.1.1]
 
 * fix LCP LQIP method, including format conversion in LQIP method because chaining is not possible for files with different extension
