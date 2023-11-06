@@ -3,11 +3,17 @@ namespace Innoweb\ImagePlaceholders;
 
 use BadMethodCallException;
 use Intervention\Image\Image;
+use Psr\Log\LoggerInterface;
+use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image_Backend;
 use SilverStripe\Assets\InterventionBackend;
+use SilverStripe\Assets\Storage\AssetStore;
+use SilverStripe\Assets\Storage\DBFile;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Environment;
 use SilverStripe\Core\Extension;
+use SilverStripe\Core\Injector\Injector;
+use SilverStripe\ORM\FieldType\DBField;
 
 class ImageExtension extends Extension
 {
@@ -98,37 +104,91 @@ class ImageExtension extends Extension
     }
 
 	/**
-	 * LCP LQIP based on https://csswizardry.com/2023/09/the-ultimate-lqip-lcp-technique/
+	 * LCP LQIP based on https://csswizardry.com/2023/09/the-ultimate-lqip-lcp-technique/.
+	 * Converts the file to a new format (e.g. avif, webp) like tractorcow/silverstripe-image-formatter
+	 * does. This is necessary because we can't make changes to a formatted image after it is saved because SS
+	 * doesn't allow manipulating files with a different extension than the original. That's why we have to do the
+	 * formatting and LQIP  in one go.
 	 *
-	 * @return InterventionBackend intervention image backend
+	 * @param string $format new file extension
+	 * @return File|DBFile
 	 */
-	public function LCPLQIP()
+	public function LCPLQIP(string $format = null)
 	{
+		if (!$this->getOwner()->getIsImage()) {
+			throw new BadMethodCallException("Format can only be called on images");
+		}
+
+		// Can't convert if it doesn't exist
+		if (!$this->getOwner()->exists()) {
+			return null;
+		}
+
 		Environment::setMemoryLimitMax('512M');
 		Environment::increaseMemoryLimitTo('512M');
+		Environment::increaseTimeLimitTo();
 
-		$variant = $this->getOwner()->variantName(__FUNCTION__);
-		return $this->getOwner()->manipulateImage($variant, function (Image_Backend $backend) use ($red, $green, $blue) {
-			$backendClone = clone $backend;
+		// get new variant string
+		$variant = $this->getOwner()->variantName(__FUNCTION__, $format);
+		$existingVariant = $this->getOwner()->getVariant();
+		if ($existingVariant) {
+			$variant = $existingVariant . '_' . $variant;
+		}
 
-			/**
-			 * @var $resource Image intervention image
-			 */
+		// Check asset details
+		$filename = $this->getOwner()->getFilename();
+		$hash = $this->getOwner()->getHash();
+
+		// Skip if file converted to same extension
+		$extension = $this->getOwner()->getExtension();
+		$newFilename = $filename;
+		if (is_null($format)) {
+			$format = $extension;
+		} elseif (strcasecmp($extension, $format) !== 0) {
+			$newFilename = substr($filename, 0, -strlen($extension)) . strtolower($format);
+		}
+
+		// Create this asset in the store if it doesn't already exist,
+		// otherwise use the existing variant
+		/** @var AssetStore $store */
+		$store = Injector::inst()->get(AssetStore::class);
+		$backend = null;
+		if ($store->exists($newFilename, $hash, $variant)) {
+			$tuple = [
+				'Filename' => $newFilename,
+				'Hash'     => $hash,
+				'Variant'  => $variant
+			];
+		} elseif (!$this->getOwner()->getAllowGeneration()) {
+			// Circumvent image generation if disabled
+			return null;
+		} else {
+			// Ask intervention to re-save in a new format
+			/** @var Image_Backend $backend */
+			$backend = $this->getOwner()->getImageBackend();
+
+			/** @var Image $resource intervention image */
 			$resource = clone $backend->getImageResource();
+			if (!$resource) {
+				Injector::inst()->get(LoggerInterface::class)->error('no resource');
+				return null;
+			}
+
+			$backendClone = clone $backend;
 
 			// get size
 			$width = $resource->getWidth();
 			$height = $resource->getHeight();
 
 			// pixellate and blur
-			$resource = $resource->pixelate(8);
+			$resource = $resource->pixelate(2);
 			$resource = $resource->blur(100);
 			$resource = $resource->limitColors(255);
 			$resource = $resource->interlace();
 
 			// encode result
 			$quality = 0;
-			$result = $resource->encode($resource->extension, $quality);
+			$result = $resource->encode($format, $quality);
 
 			// intervention image can be casted to string to access data
 			$size = strlen((string) $result);
@@ -136,7 +196,7 @@ class ImageExtension extends Extension
 			// re-calculate result with increased quality if the image is too small
 			while ($size < self::min_size($width, $height) && $quality < 90) {
 				$quality += 1;
-				$result = $resource->encode($resource->extension, $quality);
+				$result = $resource->encode($format, $quality);
 				$size = strlen((string) $result);
 			}
 
@@ -148,8 +208,36 @@ class ImageExtension extends Extension
 			unset($resource);
 			unset($result);
 
-			return $backendClone;
-		});
+			// Immediately save to new filename
+			// Normal asset visibility doesn't work for images with different filenames, so
+			// save to public.
+			$tuple = $backendClone->writeToStore(
+				$store,
+				$newFilename,
+				$hash,
+				$variant,
+				[
+					'conflict'   => AssetStore::CONFLICT_USE_EXISTING,
+					'visibility' => AssetStore::VISIBILITY_PUBLIC,
+				]
+			);
+			if (!$tuple) {
+				throw new Exception("Could not convert image {$filename} to {$newFilename}");
+			}
+		}
+
+		// Store result in new DBFile instance
+		/** @var DBFile $file */
+		$file = DBField::create_field('DBFile', $tuple);
+		$file->setOriginal($this->getOwner());
+
+		// Pass the manipulated image backend down to the resampled image - this allows chained manipulations
+		// without having to re-load the image resource from the manipulated file written to disk
+		if ($backendClone) {
+			$file->setImageBackend($backendClone);
+		}
+
+		return $file;
 	}
 
 	/**
