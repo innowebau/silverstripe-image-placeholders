@@ -152,7 +152,7 @@ class ImageExtension extends Extension
 		// otherwise use the existing variant
 		/** @var AssetStore $store */
 		$store = Injector::inst()->get(AssetStore::class);
-		$backend = null;
+		$backendClone = null;
 		if ($store->exists($newFilename, $hash, $variant)) {
 			$tuple = [
 				'Filename' => $newFilename,
