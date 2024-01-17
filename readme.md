@@ -17,6 +17,7 @@ and [488](https://github.com/silverstripe/silverstripe-assets/issues/488)). Than
 ## Requirements
 
 * Silverstripe Assets 2.x
+* tractorcow/silverstripe-image-formatter 1.1
 
 ## Installation
 
