@@ -2,7 +2,17 @@
 
 ## Overview
 
-Provides low quality and greyscale image placeholders including base64 encoded URL data.
+Provides LQIP (low quality image placeholder) and GIP (greyscale image placeholder) including base64 encoded URL data.
+
+It also contains a method for [LCP LQIP described by Harry Roberts](https://csswizardry.com/2023/09/the-ultimate-lqip-lcp-technique/) 
+which lets you use a LQIP so that it counts as the LCP image and the hi-res image gets swapped in later on. Thanks Harry 
+for this wizardry ;)
+
+The LCP LQIP functionality also contains the formatting functionality found in 
+[tractorcow/silverstripe-image-formatter](https://github.com/tractorcow/silverstripe-image-formatter) to create LCP LQIP 
+images in different formats (because Silverstripe still can't store images in multiple formats, see issues 
+[441](https://github.com/silverstripe/silverstripe-assets/issues/441) 
+and [488](https://github.com/silverstripe/silverstripe-assets/issues/488)). Thanks Damian.
 
 ## Requirements
 
@@ -105,4 +115,4 @@ as the `LCPLQIP` image, the `LCPLQIP` image is counted as the LCP image instead 
 
 ## License
 
-Proprietary
+BSD 3-Clause License, see [License](license.md)
