@@ -105,4 +105,4 @@ as the `LCPLQIP` image, the `LCPLQIP` image is counted as the LCP image instead 
 
 ## License
 
-Proprietary
+BSD 3-Clause License, see [License](license.md)
