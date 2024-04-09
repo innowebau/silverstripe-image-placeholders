@@ -27,6 +27,8 @@ composer require innoweb/silverstripe-image-placeholders dev-master
 ```
 Then run dev/build.
 
+We recommend to install the [imagick PHP extension](https://www.php.net/manual/en/book.imagick.php) for better performance. 
+
 ## Usage
 
 Make sure that any resizing is done prior to generating the placeholder image.
