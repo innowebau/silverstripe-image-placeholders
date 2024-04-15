@@ -14,8 +14,7 @@
     }],
     "require": {
         "ext-gd": "*",
-        "silverstripe/assets": "^2",
-        "tractorcow/silverstripe-image-formatter": "^1.1.0"
+        "silverstripe/assets": "^2.2"
     },
     "autoload": {
         "psr-4": {

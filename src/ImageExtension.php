@@ -105,98 +105,23 @@ class ImageExtension extends Extension
 
     /**
      * LCP LQIP based on https://csswizardry.com/2023/09/the-ultimate-lqip-lcp-technique/.
-     * Converts the file to a new format (e.g. avif, webp) like tractorcow/silverstripe-image-formatter
-     * does. This is necessary because we can't make changes to a formatted image after it is saved because SS
-     * doesn't allow manipulating files with a different extension than the original. That's why we have to do the
-     * formatting and LQIP  in one go.
+     * Please use tractorcow/silverstripe-image-formatter before LCPLQIP, otherwise the minimum size calculations
+     * will be incorrect.
      *
-     * @param string $format new file extension
-     * @return File|DBFile
+     * @return InterventionBackend image
      */
-    public function LCPLQIP(string $format = null)
+    public function LCPLQIP()
     {
-        if (!$this->getOwner()->getIsImage()) {
-            throw new BadMethodCallException("Format can only be called on images");
-        }
-
-        // Can't convert if it doesn't exist
-        if (!$this->getOwner()->exists()) {
-            return null;
-        }
-
-        Environment::setMemoryLimitMax('1024M');
-        Environment::increaseMemoryLimitTo('1024M');
-        Environment::increaseTimeLimitTo(120);
-
-        // get new variant string
-        $variant = $this->getOwner()->variantName(__FUNCTION__, $format);
-        $existingVariant = $this->getOwner()->getVariant();
-        if ($existingVariant) {
-            $variant = $existingVariant . '_' . $variant;
-        }
-
-        // Check asset details
-        $filename = $this->getOwner()->getFilename();
-        $hash = $this->getOwner()->getHash();
-
-        // Skip if file converted to same extension
-        $extension = $this->getOwner()->getExtension();
-        $newFilename = $filename;
-        if (is_null($format)) {
-            $format = $extension;
-        } elseif (strcasecmp($extension, $format) !== 0) {
-            $newFilename = substr($filename, 0, -strlen($extension)) . strtolower($format);
-        }
-
-        // Create this asset in the store if it doesn't already exist,
-        // otherwise use the existing variant
-        /** @var AssetStore $store */
-        $store = Injector::inst()->get(AssetStore::class);
-        $backendClone = null;
-        if ($store->exists($newFilename, $hash, $variant)) {
-            $tuple = [
-                'Filename' => $newFilename,
-                'Hash'     => $hash,
-                'Variant'  => $variant
-            ];
-        } elseif (!$this->getOwner()->getAllowGeneration()) {
-            // Circumvent image generation if disabled
-            return null;
-        } else {
-            // Ask intervention to re-save in a new format
-            /** @var Image_Backend $backend */
-            $backend = $this->getOwner()->getImageBackend();
-
-            /** @var Image $resource intervention image */
-            $resource = clone $backend->getImageResource();
-            if (!$resource) {
-                Injector::inst()->get(LoggerInterface::class)->error('no resource');
-                return null;
-            }
-
+        $variant = $this->getOwner()->variantName(__FUNCTION__);
+        return $this->getOwner()->manipulateImage($variant, function (Image_Backend $backend) {
             $backendClone = clone $backend;
-            $backend = null;
+            $resource = clone $backend->getImageResource();
 
             // get size
             $width = $resource->getWidth();
             $height = $resource->getHeight();
 
-            // pixellate and blur
-            if (extension_loaded('imagick')) {
-                $stream = $this->getOwner()->getStream();
-                $imageData = stream_get_contents($stream);
-                $imagick = new \Imagick();
-                $imagick->readImageBlob($imageData);
-                $imagick->quantizeImage(8, \Imagick::COLORSPACE_RGB, 0, false, false);
-                $resource->setEncoded($imagick->getImageBlob());
-                $imagick = null;
-                $imageData = null;
-                $stream = null;
-            } else {
-                $resource = $resource->limitColors(8);
-            }
-
-            // encode result
+            // encode with lowest quality
             $quality = 0;
             $result = $resource->encode($format, $quality);
 
@@ -206,49 +131,17 @@ class ImageExtension extends Extension
             // re-calculate result with increased quality if the image is too small
             $minSize = self::min_size($width, $height);
             while ($size < $minSize && $quality < 90) {
-                $quality += 3;
+                $quality += 5;
                 $result = $resource->encode($format, $quality);
                 $size = strlen((string) $result);
             }
 
             // update backend with result
             $backendClone->setQuality($quality);
-            $backendClone->setImageResource($result);
 
-            // Immediately save to new filename
-            // Normal asset visibility doesn't work for images with different filenames, so
-            // save to public.
-            $tuple = $backendClone->writeToStore(
-                $store,
-                $newFilename,
-                $hash,
-                $variant,
-                [
-                    'conflict'   => AssetStore::CONFLICT_USE_EXISTING,
-                    'visibility' => AssetStore::VISIBILITY_PUBLIC,
-                ]
-            );
-            if (!$tuple) {
-                throw new Exception("Could not convert image {$filename} to {$newFilename}");
-            }
-
-            // release memory
-            $resource = null;
-            $result = null;
-        }
-
-        // Store result in new DBFile instance
-        /** @var DBFile $file */
-        $file = DBField::create_field('DBFile', $tuple);
-        $file->setOriginal($this->getOwner());
-
-        // Pass the manipulated image backend down to the resampled image - this allows chained manipulations
-        // without having to re-load the image resource from the manipulated file written to disk
-        if ($backendClone) {
-            $file->setImageBackend($backendClone);
-        }
-
-        return $file;
+            $backendClone->setImageResource($resource);
+            return $backendClone;
+        });
     }
 
     /**

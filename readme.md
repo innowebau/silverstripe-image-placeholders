@@ -8,16 +8,10 @@ It also contains a method for [LCP LQIP described by Harry Roberts](https://cssw
 which lets you use a LQIP so that it counts as the LCP image and the hi-res image gets swapped in later on. Thanks Harry 
 for this wizardry ;)
 
-The LCP LQIP functionality also contains the formatting functionality found in 
-[tractorcow/silverstripe-image-formatter](https://github.com/tractorcow/silverstripe-image-formatter) to create LCP LQIP 
-images in different formats (because Silverstripe still can't store images in multiple formats, see issues 
-[441](https://github.com/silverstripe/silverstripe-assets/issues/441) 
-and [488](https://github.com/silverstripe/silverstripe-assets/issues/488)). Thanks Damian.
-
 ## Requirements
 
-* Silverstripe Assets 2.x
-* tractorcow/silverstripe-image-formatter 1.1
+* Silverstripe Assets ^2.2 (Silverstripe ^5.2)
+
 
 ## Installation
 
@@ -26,8 +20,6 @@ Install the module using composer:
 composer require innoweb/silverstripe-image-placeholders dev-master
 ```
 Then run dev/build.
-
-We recommend to install the [imagick PHP extension](https://www.php.net/manual/en/book.imagick.php) for better performance. 
 
 ## Usage
 
