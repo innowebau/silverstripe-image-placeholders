@@ -123,7 +123,7 @@ class ImageExtension extends Extension
 
             // encode with lowest quality
             $quality = 0;
-            $result = $resource->encode($format, $quality);
+            $result = $resource->encode(null, $quality);
 
             // intervention image can be casted to string to access data
             $size = strlen((string) $result);
@@ -132,7 +132,7 @@ class ImageExtension extends Extension
             $minSize = self::min_size($width, $height);
             while ($size < $minSize && $quality < 90) {
                 $quality += 5;
-                $result = $resource->encode($format, $quality);
+                $result = $resource->encode(null, $quality);
                 $size = strlen((string) $result);
             }
 
