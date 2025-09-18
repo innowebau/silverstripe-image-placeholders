@@ -2,19 +2,14 @@
 namespace Innoweb\ImagePlaceholders;
 
 use BadMethodCallException;
-use Exception;
+use ColorThief\ColorThief;
+use Intervention\Image\Encoders\AutoEncoder;
 use Intervention\Image\Image;
-use Psr\Log\LoggerInterface;
-use SilverStripe\Assets\File;
 use SilverStripe\Assets\Image_Backend;
 use SilverStripe\Assets\InterventionBackend;
-use SilverStripe\Assets\Storage\AssetStore;
-use SilverStripe\Assets\Storage\DBFile;
 use SilverStripe\Core\Config\Config;
 use SilverStripe\Core\Environment;
 use SilverStripe\Core\Extension;
-use SilverStripe\Core\Injector\Injector;
-use SilverStripe\ORM\FieldType\DBField;
 
 class ImageExtension extends Extension
 {
@@ -64,14 +59,17 @@ class ImageExtension extends Extension
             $backendClone = clone $backend;
             $backendClone->setQuality(1);
 
+            /**
+             * @var Image $resource
+             */
             $resource = clone $backend->getImageResource();
 
             // calculate the smallest size with the correct aspect ratio
-            $width = $resource->getWidth();
-            $height = $resource->getHeight();
+            $width = $resource->width();
+            $height = $resource->height();
             $divisor = self::gcd($width, $height);
-            $width = $width / $divisor;
-            $height = $height / $divisor;
+            $width /= $divisor;
+            $height /= $divisor;
 
             // resize image
             $resource = $resource->resize($width, $height);
@@ -86,7 +84,8 @@ class ImageExtension extends Extension
             rewind($stream);
             $imageData = stream_get_contents($stream);
             // fill image with newly generated image data
-            $resource = $resource->fill($imageData);
+            $imageManager = $backendClone->getImageManager();
+            $resource = $imageManager->read($imageData);
             // set resource
             $backendClone->setImageResource($resource);
 
@@ -103,6 +102,62 @@ class ImageExtension extends Extension
         });
     }
 
+	/**
+	 * Dominant Colour Image Placeholder
+	 *
+	 * @return InterventionBackend image
+	 */
+	public function DCIP()
+	{
+		$variant = $this->getOwner()->variantName(__FUNCTION__);
+		return $this->getOwner()->manipulateImage($variant, function (Image_Backend $backend) {
+			$backendClone = clone $backend;
+			$backendClone->setQuality(1);
+
+			/**
+			 * @var Image $resource
+			 */
+			$resource = clone $backend->getImageResource();
+
+			// calculate the smallest size with the correct aspect ratio
+			$width = $resource->width();
+			$height = $resource->height();
+			$divisor = self::gcd($width, $height);
+			$width /= $divisor;
+			$height /= $divisor;
+
+			// resize image
+			$resource = $resource->resize($width, $height);
+
+			// generate uniform image stream
+			$image = imagecreate($width, $height);
+			// set colour
+			$dominantColorArray = ColorThief::getColor($backend->getAssetContainer()->getString());
+			imagecolorallocate($image, $dominantColorArray[0], $dominantColorArray[1], $dominantColorArray[2]);
+			// use memory stream to get the output
+			$stream = fopen('php://temp', 'r+');
+			imagepng($image, $stream);
+			rewind($stream);
+			$imageData = stream_get_contents($stream);
+			// fill image with newly generated image data
+			$imageManager = $backendClone->getImageManager();
+			$resource = $imageManager->read($imageData);
+			// set resource
+			$backendClone->setImageResource($resource);
+
+			// release memory
+			$width = null;
+			$height = null;
+			$divisor = null;
+			$image = null;
+			$resource = null;
+			$stream = null;
+			$imageData = null;
+
+			return $backendClone;
+		});
+	}
+
     /**
      * LCP LQIP based on https://csswizardry.com/2023/09/the-ultimate-lqip-lcp-technique/.
      * Please use tractorcow/silverstripe-image-formatter before LCPLQIP, otherwise the minimum size calculations
@@ -115,31 +170,34 @@ class ImageExtension extends Extension
         $variant = $this->getOwner()->variantName(__FUNCTION__);
         return $this->getOwner()->manipulateImage($variant, function (Image_Backend $backend) {
             $backendClone = clone $backend;
+            /**
+             * @var Image $resource
+             */
             $resource = clone $backend->getImageResource();
 
             // get size
-            $width = $resource->getWidth();
-            $height = $resource->getHeight();
+            $width = $resource->width();
+            $height = $resource->height();
 
             // encode with lowest quality
             $quality = 0;
-            $result = $resource->encode(null, $quality);
+            $result = $resource->encode(new AutoEncoder(quality: $quality));
 
             // intervention image can be casted to string to access data
             $size = strlen((string) $result);
 
             // re-calculate result with increased quality if the image is too small
-            $minSize = self::min_size($width, $height);
+            $minSize = $this->min_size($width, $height);
             while ($size < $minSize && $quality < 90) {
                 $quality += 5;
-                $result = $resource->encode(null, $quality);
+                $result = $resource->encode(new AutoEncoder(quality: $quality));
                 $size = strlen((string) $result);
             }
 
             // update backend with result
             $backendClone->setQuality($quality);
 
-            $backendClone->setImageResource($resource);
+            //$backendClone->setImageResource($result);
             return $backendClone;
         });
     }
@@ -150,10 +208,10 @@ class ImageExtension extends Extension
      * @param int $height
      * @return int bytes
      */
-    private static function min_size($width, $height)
+    private function min_size($width, $height)
     {
         // divide by 8 to get bytes
-        return $width * $height * Config::inst()->get(__CLASS__, 'min_bits_per_pixel') / 8;
+        return $width * $height * Config::inst()->get(self::class, 'min_bits_per_pixel') / 8;
     }
 
     /**
@@ -167,13 +225,14 @@ class ImageExtension extends Extension
         if ($y == 0) {
             return $x;
         }
+
         return self::gcd($y, $x%$y);
     }
 
     /**
      * Return Base64 encoded data URL for this image, e.g. "data:image/png;base64,..."
      *
-     * @throws \BadMethodCallException
+     * @throws BadMethodCallException
      * @return NULL|string url
      */
     public function DataURL()

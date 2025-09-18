@@ -14,7 +14,8 @@
     }],
     "require": {
         "ext-gd": "*",
-        "silverstripe/assets": "^2.2"
+        "silverstripe/assets": "^3",
+        "ksubileau/color-thief-php": "^2"
     },
     "autoload": {
         "psr-4": {
